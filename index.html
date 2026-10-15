@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XAUUSD News Predictor</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  /* ===== Token warna sesuai spesifikasi ===== */
+  :root{
+    --bg:#0f0f1a; --card:#1a1a2e; --card2:#14142a; --line:#2a2a45;
+    --ink:#e8e8f0; --muted:#8b8ba7; --long:#00d4aa; --short:#ff4757; --neutral:#ffa502;
+  }
+  html,body{background:var(--bg);color:var(--ink);font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px}
+  .muted{color:var(--muted)}
+  .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+  .c-long{color:var(--long)} .c-short{color:var(--short)} .c-neutral{color:var(--neutral)}
+  .bg-long{background:rgba(0,212,170,.12);color:var(--long)}
+  .bg-short{background:rgba(255,71,87,.12);color:var(--short)}
+  .bg-neutral{background:rgba(255,165,2,.12);color:var(--neutral)}
+  .bg-dim{background:#24243d;color:var(--muted)}
+  input.f,select.f{background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;width:100%;color:var(--ink);font-variant-numeric:tabular-nums}
+  input.f:focus,select.f:focus{outline:none;border-color:#5a5a8a;box-shadow:0 0 0 2px rgba(120,120,200,.2)}
+  input.f::placeholder{color:#55557a}
+  .btn{border-radius:8px;padding:8px 14px;font-weight:600;font-size:13px;transition:.15s;border:1px solid var(--line);background:#23233d;min-height:38px}
+  .btn:hover{background:#2d2d4d}
+  .btn-primary{background:var(--neutral);color:#1a1200;border-color:transparent}
+  .btn-primary:hover{filter:brightness(1.08);background:var(--neutral)}
+  .tab{padding:8px 16px;border-radius:9px;font-weight:700;font-size:13px;color:var(--muted);min-height:38px}
+  .tab.active{background:#2a2a48;color:var(--ink)}
+  /* Kotak prediksi: glow sesuai arah */
+  .pbox{transition:box-shadow .4s,border-color .4s}
+  .pbox.long{border-color:rgba(0,212,170,.6);box-shadow:0 0 0 1px rgba(0,212,170,.25),0 0 40px rgba(0,212,170,.22),inset 0 0 60px rgba(0,212,170,.05)}
+  .pbox.short{border-color:rgba(255,71,87,.6);box-shadow:0 0 0 1px rgba(255,71,87,.25),0 0 40px rgba(255,71,87,.22),inset 0 0 60px rgba(255,71,87,.05)}
+  .pbox.neutral{border-color:rgba(255,165,2,.5);box-shadow:0 0 30px rgba(255,165,2,.15)}
+  /* Animasi digit countdown */
+  .digit{display:inline-block;min-width:1.15ch;text-align:center}
+  .tick{animation:tick .35s ease-out}
+  @keyframes tick{from{transform:translateY(-4px);opacity:.4}to{transform:none;opacity:1}}
+  .urgent{animation:pulse 1.2s ease-in-out infinite}
+  @keyframes pulse{50%{opacity:.55}}
+  .meter{height:10px;border-radius:99px;background:linear-gradient(90deg,var(--long),#3a3a55 50%,var(--short));position:relative}
+  .meter i{position:absolute;top:-4px;width:4px;height:18px;border-radius:3px;background:#fff;box-shadow:0 0 8px #fff;transition:left .5s}
+  .badge{font-size:10px;font-weight:700;letter-spacing:.04em;padding:1px 6px;border-radius:5px;text-transform:uppercase}
+  table.h td,table.h th{padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+  table.h th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;text-align:left}
+  .dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+  details>summary{cursor:pointer;list-style:none} details>summary::-webkit-details-marker{display:none}
+  @media (prefers-reduced-motion:reduce){.tick,.urgent{animation:none}.meter i{transition:none}}
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- ================= HEADER ================= -->
+<header class="border-b border-[#2a2a45] sticky top-0 z-20 bg-[#0f0f1a]/95 backdrop-blur">
+  <div class="max-w-[1400px] mx-auto px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-2">
+    <div class="flex items-baseline gap-3">
+      <h1 class="text-lg font-extrabold tracking-tight">XAUUSD <span class="c-neutral">News Predictor</span></h1>
+    </div>
+    <div class="flex items-center gap-2 text-sm">
+      <span id="mktDot" class="dot"></span><span id="mktLabel" class="muted"></span>
+    </div>
+    <div class="ml-auto flex items-center gap-4">
+      <div class="text-right leading-tight">
+        <div id="clockWib" class="num font-bold text-lg">--:--:--</div>
+        <div id="dateWib" class="muted text-[11px]">WIB</div>
+      </div>
+      <button id="btnRefresh" class="btn" title="Ambil ulang semua data">↻ Refresh</button>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-[1400px] mx-auto px-4 py-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_330px]">
+  <div class="space-y-5 min-w-0">
+
+    <!-- ========== SECTION 1: COUNTDOWN ========== -->
+    <section class="card p-5" id="secCountdown">
+      <div class="flex flex-wrap items-start gap-6">
+        <div class="min-w-0 flex-1">
+          <div class="text-[11px] uppercase tracking-[.14em] muted mb-1">News berikutnya</div>
+          <div id="cdLabel" class="text-2xl sm:text-3xl font-extrabold num">Memuat jadwal…</div>
+          <div id="cdWhen" class="muted mt-1 text-sm"></div>
+        </div>
+        <div id="cdDigits" class="num font-extrabold text-4xl sm:text-5xl tracking-tight"></div>
+      </div>
+      <div class="mt-4 pt-4 border-t border-[#2a2a45]">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-[11px] uppercase tracking-[.14em] muted">Jadwal mendatang (WIB)</div>
+          <button id="btnEditSched" class="text-xs muted hover:text-white underline underline-offset-2">Edit jadwal</button>
+        </div>
+        <div id="schedList" class="grid sm:grid-cols-2 xl:grid-cols-3 gap-2 text-sm"></div>
+        <div id="schedEditor" class="hidden mt-3"></div>
+      </div>
+    </section>
+
+    <!-- Tab jenis news -->
+    <nav class="card p-1.5 flex flex-wrap gap-1" id="tabs">
+      <button class="tab" data-tab="NFP">NFP</button>
+      <button class="tab" data-tab="CPI">CPI</button>
+      <button class="tab" data-tab="PPI">PPI</button>
+      <button class="tab" data-tab="FOMC">FOMC</button>
+      <div class="ml-auto flex items-center gap-2 pr-1">
+        <button id="btnDummy" class="btn text-xs" title="Isi semua input dengan data dummy untuk uji logic engine offline">Isi data dummy</button>
+        <button id="btnClearInputs" class="btn text-xs">Kosongkan</button>
+      </div>
+    </nav>
+
+    <div class="grid gap-5 xl:grid-cols-2">
+      <!-- ========== SECTION 2: PRE-NEWS DATA PANEL ========== -->
+      <section class="card p-5" id="secPre">
+        <div class="flex items-center justify-between mb-1">
+          <h2 class="font-bold">Pre-News Data <span id="preType" class="muted font-medium"></span></h2>
+          <span id="preWindow" class="badge"></span>
+        </div>
+        <p id="preNote" class="muted text-xs mb-4"></p>
+        <div id="preBody" class="space-y-3"></div>
+        <div class="mt-5">
+          <div class="flex justify-between text-[11px] font-semibold mb-1.5">
+            <span class="c-long">BEARISH USD · LONG XAU</span><span class="muted">NETRAL</span><span class="c-short">BULLISH USD · SHORT XAU</span>
+          </div>
+          <div class="meter"><i id="meterNeedle" style="left:50%"></i></div>
+          <div id="meterText" class="text-sm mt-2 font-semibold"></div>
+        </div>
+      </section>
+
+      <!-- ========== SECTION 3: PREDICTION BOX ========== -->
+      <section class="card pbox p-6 flex flex-col" id="pbox">
+        <div class="flex items-center justify-between">
+          <div class="text-[11px] uppercase tracking-[.14em] muted">Prediksi <span id="pbType"></span></div>
+          <span id="pbStage" class="badge bg-dim">—</span>
+        </div>
+        <div class="flex-1 flex flex-col justify-center py-6 text-center">
+          <div id="pbSignal" class="text-4xl sm:text-5xl font-black tracking-tight">—</div>
+          <div class="flex justify-center gap-8 mt-5">
+            <div><div class="text-[11px] muted uppercase tracking-widest">Strength</div><div id="pbStrength" class="text-xl font-extrabold mt-0.5">—</div></div>
+            <div><div class="text-[11px] muted uppercase tracking-widest">Confidence</div><div id="pbConf" class="text-xl font-extrabold num mt-0.5">—</div></div>
+          </div>
+          <div class="mx-auto mt-4 w-full max-w-xs h-1.5 rounded bg-[#24243d] overflow-hidden"><div id="pbConfBar" class="h-full transition-all duration-500" style="width:0"></div></div>
+        </div>
+        <div id="pbReason" class="text-sm bg-[#14142a] rounded-lg p-3 leading-relaxed"></div>
+        <div id="pbVerify" class="mt-3 text-sm font-semibold"></div>
+      </section>
+    </div>
+
+    <!-- ========== SECTION 4: LIVE ACTUAL INPUT ========== -->
+    <section class="card p-5" id="secLive">
+      <div class="flex flex-wrap items-center gap-3 mb-4">
+        <h2 class="font-bold">Live Actual Input <span id="liveType" class="muted font-medium"></span></h2>
+        <span id="liveStatus" class="badge bg-dim"></span>
+        <div class="ml-auto flex gap-2">
+          <button id="btnFetchActual" class="btn text-xs">Auto-fetch actual (BLS)</button>
+        </div>
+      </div>
+      <div id="liveBody"></div>
+      <div class="mt-4 grid sm:grid-cols-3 gap-3 items-end">
+        <label class="text-xs muted">Harga XAU saat rilis ($)
+          <input class="f mt-1" id="xauAtRelease" placeholder="otomatis saat UPDATE">
+        </label>
+        <label class="text-xs muted">Reaksi XAU manual ($, opsional)
+          <input class="f mt-1" id="xauReactionManual" placeholder="kosong = pakai harga live">
+        </label>
+        <div class="flex gap-2">
+          <button id="btnUpdateActual" class="btn btn-primary flex-1">UPDATE ACTUAL</button>
+          <button id="btnSaveHistory" class="btn" title="Simpan hasil ke History Log">Simpan</button>
+        </div>
+      </div>
+      <div id="liveMsg" class="text-xs muted mt-2"></div>
+    </section>
+
+    <!-- ========== SECTION 5: HISTORY LOG ========== -->
+    <section class="card p-5" id="secHistory">
+      <div class="flex flex-wrap items-center gap-3 mb-3">
+        <h2 class="font-bold">History Log <span class="muted font-medium text-sm">12 bulan terakhir</span></h2>
+        <select id="histFilter" class="f !w-auto text-sm">
+          <option value="ALL">Semua news</option><option>NFP</option><option>CPI</option><option>PPI</option><option>FOMC</option>
+        </select>
+        <div class="ml-auto flex flex-wrap gap-2">
+          <button id="btnSeedHist" class="btn text-xs">+ Contoh dummy</button>
+          <button id="btnExport" class="btn text-xs">Export JSON</button>
+          <label class="btn text-xs cursor-pointer">Import<input type="file" id="fileImport" accept=".json" class="hidden"></label>
+          <button id="btnClearHist" class="btn text-xs">Hapus semua</button>
+        </div>
+      </div>
+      <div id="accuracy" class="text-sm font-semibold mb-3 num"></div>
+      <div class="overflow-x-auto">
+        <table class="h w-full text-sm num">
+          <thead><tr><th>Tanggal</th><th>News</th><th>Actual vs Forecast</th><th>Prediksi</th><th>Reaksi XAU</th><th>Hasil</th><th></th></tr></thead>
+          <tbody id="histBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Uji logic engine (berjalan offline) -->
+    <details class="card p-5" id="secTests">
+      <summary class="flex items-center justify-between font-bold">Uji Logic Engine (data dummy, offline) <span id="testSummary" class="badge bg-dim"></span></summary>
+      <div id="testBody" class="mt-3 text-xs num space-y-1"></div>
+    </details>
+  </div>
+
+  <!-- ================= SIDEBAR ================= -->
+  <aside class="space-y-5">
+    <section class="card p-5">
+      <div class="text-[11px] uppercase tracking-[.14em] muted">XAU/USD</div>
+      <div id="sbXau" class="text-4xl font-black num mt-1">—</div>
+      <div id="sbXauMeta" class="text-xs muted mt-1"></div>
+      <div class="grid grid-cols-2 gap-4 mt-5 pt-4 border-t border-[#2a2a45]">
+        <div><div class="text-[11px] uppercase tracking-widest muted">DXY</div><div id="sbDxy" class="text-xl font-bold num">—</div><div id="sbDxyMeta" class="text-[11px] muted"></div></div>
+        <div><div class="text-[11px] uppercase tracking-widest muted">US10Y</div><div id="sbTnx" class="text-xl font-bold num">—</div><div id="sbTnxMeta" class="text-[11px] muted"></div></div>
+        <div><div class="text-[11px] uppercase tracking-widest muted">Crude 30H</div><div id="sbOil" class="text-xl font-bold num">—</div><div id="sbOilMeta" class="text-[11px] muted"></div></div>
+        <div><div class="text-[11px] uppercase tracking-widest muted">Fed Rate</div>
+          <input id="sbFed" class="f !p-1 !text-base font-bold mt-0.5" value="3.75%-4.00%"></div>
+      </div>
+    </section>
+
+    <section class="card p-5">
+      <div class="text-[11px] uppercase tracking-[.14em] muted mb-3">Status sumber data</div>
+      <ul id="srcList" class="space-y-1.5 text-sm"></ul>
+      <label class="block text-[11px] muted mt-3">BLS API key (opsional, gratis di data.bls.gov/registrationEngine)
+        <input id="blsKey" class="f text-xs mt-1" placeholder="tanpa key: 25 request/hari"></label>
+      <div id="proxyHint" class="text-xs muted mt-3 leading-relaxed"></div>
+    </section>
+
+    <section class="card p-5 text-sm">
+      <div class="text-[11px] uppercase tracking-[.14em] muted mb-3">Referensi</div>
+      <div class="grid gap-1.5">
+        <a class="hover:underline" target="_blank" rel="noopener" href="https://www.investing.com/economic-calendar/">Investing.com Economic Calendar ↗</a>
+        <a class="hover:underline" target="_blank" rel="noopener" href="https://www.forexfactory.com/calendar">ForexFactory Calendar ↗</a>
+        <a class="hover:underline" target="_blank" rel="noopener" href="https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html">CME FedWatch Tool ↗</a>
+        <a class="hover:underline" target="_blank" rel="noopener" href="https://www.bls.gov/schedule/2026/home.htm">BLS Release Schedule ↗</a>
+        <a class="hover:underline" target="_blank" rel="noopener" href="https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm">FOMC Calendar ↗</a>
+      </div>
+    </section>
+  </aside>
+</main>
+
+<footer class="max-w-[1400px] mx-auto px-4 pb-8 pt-2 text-xs muted">
+  <p><b class="c-neutral">Disclaimer:</b> Bukan financial advice. Untuk edukasi. Prediksi dihasilkan oleh aturan sederhana dan bisa salah. Volatilitas XAUUSD saat rilis news bisa sangat ekstrem.</p>
+</footer>
+
+<script>
+/* =====================================================================
+   XAUUSD NEWS PREDICTOR — satu file, vanilla JS
+   Bagian:
+   1. Utilitas & state (localStorage)
+   2. LOGIC ENGINE (fungsi murni, bisa dites offline)
+   3. Jadwal news (estimasi + ForexFactory + override manual)
+   4. Fetch data (direct → proxy lokal → allorigins)
+   5. Render UI
+   6. Uji engine & data dummy
+   ===================================================================== */
+
+/* ---------------- 1. UTILITAS & STATE ---------------- */
+const LS_KEY = 'xnp_state_v1';
+const TYPES = ['NFP', 'CPI', 'PPI', 'FOMC'];
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const r2 = x => Math.round(x * 100) / 100;           // pembulatan 2 desimal (hindari error floating 0.30000004)
+const num = v => {                                    // string → angka; kosong → null
+  if (v === null || v === undefined || v === '') return null;
+  const n = parseFloat(String(v).replace(',', '.').replace(/[^0-9.\-]/g, ''));
+  return Number.isFinite(n) ? n : null;
+};
+const sgn = (x, d = 1) => (x > 0 ? '+' : '') + x.toFixed(d);
+const fmtWIB = (d, opt) => d.toLocaleString('id-ID', Object.assign({ timeZone: 'Asia/Jakarta' }, opt));
+
+// State default
+function defaultState() {
+  return {
+    tab: null,                     // tab aktif (null = ikut news berikutnya)
+    lead: {},                      // data leading indicator (pre-news)
+    rel: { NFP: {}, CPI: {}, PPI: {}, FOMC: {} },  // input rilis (actual/forecast/previous)
+    src: {},                       // asal nilai per field: FF / BLS / manual / dummy
+    evalr: {},                     // hasil final setelah UPDATE ACTUAL, per jenis
+    tones: [],                     // log tone pidato Fed {d, who, tone}
+    history: [],
+    sched: {},                     // override jadwal: key "NFP-2026-11" → ISO UTC
+    fedRate: '3.75%-4.00%',
+    cache: {}                      // cache data pasar + kalender
+  };
+}
+let S = load();
+function load() {
+  try { return Object.assign(defaultState(), JSON.parse(localStorage.getItem(LS_KEY) || '{}')); }
+  catch { return defaultState(); }
+}
+function save() { localStorage.setItem(LS_KEY, JSON.stringify(S)); }
+
+/* ---------------- 2. LOGIC ENGINE ----------------
+   Semua fungsi murni: input angka → {signal, strength, confidence, reason}.
+   signal: 'LONG' | 'SHORT' | 'NETRAL'
+*/
+const Engine = {
+  /* NFP — sesuai spesifikasi.
+     Catatan interpretasi: ambang "50K" dan "0.2" dibaca dalam satuan data mentah
+     (selisih ribuan pekerjaan dan poin persen AHE), karena dev_ dalam % tidak
+     bisa dibandingkan dengan "50K". Perbandingan dominasi tetap memakai dev dalam %. */
+  nfp({ nfpA, nfpF, aheA, aheF }) {
+    if ([nfpA, nfpF, aheA, aheF].some(v => v === null)) return null;
+    const base = v => (Math.abs(v) < 1e-9 ? 1 : Math.abs(v));   // cegah bagi nol / forecast negatif
+    const dev_NFP = (nfpA - nfpF) / base(nfpF) * 100;
+    const dev_AHE = (aheA - aheF) / base(aheF) * 100;
+    const surpK = r2(nfpA - nfpF);       // surprise NFP dalam ribuan (K)
+    const surpAHE = r2(aheA - aheF);     // surprise AHE dalam poin persen
+    let signal, strength, driver;
+    if (Math.abs(dev_NFP) > 2 * Math.abs(dev_AHE)) {
+      signal = dev_NFP > 0 ? 'SHORT' : 'LONG';
+      strength = Math.abs(surpK) > 50 ? 'KUAT' : 'SEDANG';
+      driver = 'NFP';
+    } else {
+      signal = dev_AHE > 0 ? 'SHORT' : 'LONG';
+      strength = Math.abs(surpAHE) > 0.2 ? 'KUAT' : 'SEDANG';
+      driver = 'AHE';
+    }
+    let confidence;
+    if (dev_NFP > 0 && dev_AHE > 0) confidence = 85;
+    else if (dev_NFP < 0 && dev_AHE < 0) confidence = 85;
+    else confidence = 60;                 // kontradiktif
+    const aheTxt = surpAHE === 0 ? 'AHE netral' : `AHE ${sgn(surpAHE, 1)}pp`;
+    return {
+      signal, strength, confidence, driver,
+      reason: `NFP ${sgn(surpK, 0)}K dari forecast (${sgn(dev_NFP, 0)}%), ${aheTxt} (${sgn(dev_AHE, 0)}%) → dominan ${driver} → signal ${signal} ${strength.toLowerCase()}${confidence === 60 ? ' · sinyal kontradiktif' : ''}`,
+      avf: `NFP ${nfpA}K vs ${nfpF}K · AHE ${aheA}% vs ${aheF}%`
+    };
+  },
+
+  /* CPI — sesuai spesifikasi. Strength untuk cabang 1 & 2 tidak didefinisikan,
+     jadi: core ≥0.2 → KUAT, headline ≥0.2 → SEDANG. */
+  cpi({ coreA, coreF, headA, headF, headP }) {
+    if ([coreA, coreF, headA, headF].some(v => v === null)) return null;
+    const dev_core = r2(coreA - coreF);
+    const dev_headline = r2(headA - headF);
+    const change_from_prev = headP === null ? 0 : r2(headA - headP);
+    let signal, confidence, strength, why;
+    if (Math.abs(dev_core) >= 0.2) {
+      signal = dev_core > 0 ? 'SHORT' : 'LONG'; confidence = 80; strength = 'KUAT';
+      why = `Core CPI ${sgn(dev_core)}pp dari forecast`;
+    } else if (Math.abs(dev_headline) >= 0.2) {
+      signal = dev_headline > 0 ? 'SHORT' : 'LONG'; confidence = 75; strength = 'SEDANG';
+      why = `Headline CPI ${sgn(dev_headline)}pp dari forecast (core sesuai)`;
+    } else if (Math.abs(change_from_prev) >= 0.4) {
+      signal = change_from_prev > 0 ? 'SHORT' : 'LONG'; confidence = 65; strength = 'LEMAH';
+      why = `Sesuai forecast, tapi headline ${sgn(change_from_prev)}pp dari bulan lalu`;
+    } else {
+      signal = dev_core > 0 ? 'SHORT' : 'LONG'; confidence = 45; strength = 'LEMAH';
+      why = `Semua dekat forecast (core ${sgn(dev_core)}pp)`;
+    }
+    return { signal, strength, confidence, reason: `${why} → signal ${signal} ${strength.toLowerCase()}`,
+             avf: `Core ${coreA}% vs ${coreF}% · Headline ${headA}% vs ${headF}%` };
+  },
+
+  /* PPI — bukan sinyal trading hari ini, tapi prediksi arah CPI minggu depan. */
+  ppi({ coreA, coreF, headA, headF }) {
+    if ([coreA, coreF].some(v => v === null)) return null;
+    const dev_core_ppi = r2(coreA - coreF);
+    const dev_headline_ppi = headA !== null && headF !== null ? r2(headA - headF) : null;
+    const hot = dev_core_ppi > 0;
+    const label = hot ? '⚠️ CPI minggu depan kemungkinan PANAS → bias SHORT XAU'
+                      : '✅ CPI minggu depan kemungkinan MEREDA → bias LONG XAU';
+    const m = Math.abs(dev_core_ppi);
+    return {
+      signal: hot ? 'SHORT' : 'LONG', isBias: true, label,
+      strength: m >= 0.2 ? 'KUAT' : m >= 0.1 ? 'SEDANG' : 'LEMAH', confidence: null,
+      reason: `${label}. Core PPI ${sgn(dev_core_ppi)}pp` + (dev_headline_ppi !== null ? `, headline ${sgn(dev_headline_ppi)}pp dari forecast.` : '.'),
+      avf: `Core PPI ${coreA}% vs ${coreF}%` + (headA !== null ? ` · Headline ${headA}% vs ${headF ?? '?'}%` : '')
+    };
+  },
+
+  /* FOMC — price_in_pct = probabilitas skenario terbesar di FedWatch.
+     Arah surprise = perubahan aktual (bps) − ekspektasi tertimbang probabilitas. */
+  fomc({ pHold, pCut, pHike, actualBps, tone, preTone }) {
+    const probs = [pHold ?? 0, pCut ?? 0, pHike ?? 0];
+    if (probs.every(p => !p)) return null;
+    const price_in_pct = Math.max(...probs);
+    const toneSig = t => t === 'hawkish' ? 'SHORT' : t === 'dovish' ? 'LONG' : 'NETRAL';
+    if (price_in_pct > 80) {
+      const t = tone || preTone || 'netral';
+      return { signal: toneSig(t), confidence: 65, strength: 'SEDANG',
+        label: `Sudah price-in ${price_in_pct}% → perhatikan TONE`,
+        reason: `Sudah price-in ${price_in_pct}% → perhatikan TONE. Tone ${tone ? 'statement/presser' : 'pidato Fed (pra-rilis)'}: ${t.toUpperCase()} → ${toneSig(t)}`,
+        avf: `Price-in ${price_in_pct}% · tone ${t}` };
+    }
+    if (actualBps === null || actualBps === undefined) {
+      // Belum ada keputusan: belum ada surprise, tampilkan bias dari tone pidato
+      const t = preTone || 'netral';
+      return { signal: toneSig(t), confidence: 50, strength: 'LEMAH', pending: true,
+        reason: `Pasar belum yakin (skenario terbesar ${price_in_pct}%). Menunggu keputusan untuk arah surprise. Bias tone pidato: ${t}.`,
+        avf: `Hold ${pHold ?? 0}% / Cut ${pCut ?? 0}% / Hike ${pHike ?? 0}%` };
+    }
+    const expected = ((pCut ?? 0) * -25 + (pHike ?? 0) * 25) / 100;    // ekspektasi perubahan (bps)
+    const surprise = r2(actualBps - expected);
+    const signal = surprise > 0 ? 'SHORT' : surprise < 0 ? 'LONG' : 'NETRAL';
+    return { signal, confidence: 75, strength: Math.abs(surprise) >= 10 ? 'KUAT' : 'SEDANG',
+      reason: `Keputusan ${actualBps > 0 ? '+' : ''}${actualBps}bps vs ekspektasi pasar ${sgn(expected, 1)}bps → surprise ${surprise > 0 ? 'HAWKISH' : surprise < 0 ? 'DOVISH' : 'nol'} (${sgn(surprise, 1)}bps) → ${signal}`,
+      avf: `${actualBps}bps vs exp ${sgn(expected, 1)}bps` };
+  },
+
+  /* Bias pra-rilis dari leading indicator. Skor + = USD bullish (SHORT XAU). */
+  bias(rows) {
+    const scored = rows.filter(r => r.score !== null);
+    if (!scored.length) return null;
+    const total = scored.reduce((a, r) => a + r.score, 0);
+    const norm = total / scored.length;        // -1 .. +1
+    const signal = norm > 0.15 ? 'SHORT' : norm < -0.15 ? 'LONG' : 'NETRAL';
+    const confidence = signal === 'NETRAL' ? 40 : Math.min(70, Math.round(45 + Math.abs(norm) * 25 + scored.length * 2));
+    const strength = Math.abs(norm) >= 0.6 ? 'SEDANG' : 'LEMAH';
+    return { signal, confidence, strength, norm, n: scored.length, total };
+  },
+
+  /* Verifikasi prediksi vs reaksi harga */
+  verdict(signal, reaction) {
+    if (reaction === null || reaction === undefined || !signal || signal === 'NETRAL') return null;
+    if (Math.abs(reaction) < 1) return 'FLAT';
+    return (signal === 'SHORT' && reaction < 0) || (signal === 'LONG' && reaction > 0) ? 'BENAR' : 'SALAH';
+  }
+};
+
+/* ---------------- 3. JADWAL NEWS ----------------
+   - FOMC: tanggal resmi federalreserve.gov (hari ke-2, 14:00 ET)
+   - NFP/CPI/PPI: estimasi pola BLS (NFP Jumat pertama, CPI Rabu ke-2, PPI sehari setelah CPI), 08:30 ET
+   - Ditimpa otomatis jika kalender ForexFactory minggu ini memuat event tsb, atau oleh edit manual. */
+const FOMC_DATES = [ // tanggal pengumuman (hari ke-2)
+  '2026-01-28','2026-03-18','2026-04-29','2026-06-17','2026-07-29','2026-09-16','2026-10-28','2026-12-09',
+  '2027-01-27','2027-03-17','2027-04-28','2027-06-09','2027-07-28','2027-09-15','2027-10-27','2027-12-08'
+];
+// Apakah tanggal (UTC midday) berada dalam DST Amerika?
+function isUSDST(y, m, d) {
+  const nthSunday = (yy, mm, n) => { const f = new Date(Date.UTC(yy, mm - 1, 1)).getUTCDay(); return 1 + ((7 - f) % 7) + (n - 1) * 7; };
+  const start = Date.UTC(y, 2, nthSunday(y, 3, 2)), end = Date.UTC(y, 10, nthSunday(y, 11, 1));
+  const t = Date.UTC(y, m - 1, d);
+  return t >= start && t < end;
+}
+// Jam New York → Date (UTC)
+function etDate(y, m, d, h, mi) { return new Date(Date.UTC(y, m - 1, d, h + (isUSDST(y, m, d) ? 4 : 5), mi)); }
+function nthWeekday(y, m, weekday, n) { const f = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(); return 1 + ((weekday - f + 7) % 7) + (n - 1) * 7; }
+
+function buildSchedule() {
+  const now = new Date(), out = [];
+  for (let k = -2; k <= 4; k++) {
+    const base = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + k, 1));
+    const y = base.getUTCFullYear(), m = base.getUTCMonth() + 1, ym = `${y}-${String(m).padStart(2, '0')}`;
+    const nfpD = nthWeekday(y, m, 5, 1), cpiD = nthWeekday(y, m, 3, 2);
+    out.push({ type: 'NFP', key: `NFP-${ym}`, t: etDate(y, m, nfpD, 8, 30), src: 'estimasi' });
+    out.push({ type: 'CPI', key: `CPI-${ym}`, t: etDate(y, m, cpiD, 8, 30), src: 'estimasi' });
+    out.push({ type: 'PPI', key: `PPI-${ym}`, t: etDate(y, m, cpiD + 1, 8, 30), src: 'estimasi' });
+  }
+  FOMC_DATES.forEach(s => { const [y, m, d] = s.split('-').map(Number); out.push({ type: 'FOMC', key: `FOMC-${s.slice(0, 7)}`, t: etDate(y, m, d, 14, 0), src: 'Fed' }); });
+  // Override dari ForexFactory (eksak)
+  const ff = S.cache.ff?.data || [];
+  const ffMap = { 'Non-Farm Employment Change': 'NFP', 'CPI m/m': 'CPI', 'PPI m/m': 'PPI', 'Federal Funds Rate': 'FOMC' };
+  ff.filter(e => e.country === 'USD' && ffMap[e.title]).forEach(e => {
+    const t = new Date(e.date), type = ffMap[e.title];
+    const ym = fmtYM(t), ev = out.find(o => o.key === `${type}-${ym}`);
+    if (ev) { ev.t = t; ev.src = 'ForexFactory'; } else out.push({ type, key: `${type}-${ym}`, t, src: 'ForexFactory' });
+  });
+  // Override manual
+  Object.entries(S.sched).forEach(([key, iso]) => {
+    const ev = out.find(o => o.key === key); if (ev) { ev.t = new Date(iso); ev.src = 'manual'; }
+  });
+  return out.sort((a, b) => a.t - b.t);
+}
+function fmtYM(t) { const p = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit' }).formatToParts(t); return `${p.find(x => x.type === 'year').value}-${p.find(x => x.type === 'month').value}`; }
+
+/* ---------------- 4. FETCH DATA ----------------
+   Urutan: direct (jika CORS diizinkan) → proxy sendiri (Vercel /api/proxy atau server.py /proxy) → allorigins.win. */
+let hasLocalProxy = false;
+let PROXY_PATH = '/api/proxy';   // di Vercel: serverless function api/proxy.js
+const srcStatus = {};   // nama → {ok, note, at}
+function setSrc(name, ok, note) { srcStatus[name] = { ok, note, at: new Date() }; renderSources(); }
+
+async function tFetch(url, opt = {}, ms = 12000) {
+  const ac = new AbortController(); const tm = setTimeout(() => ac.abort(), ms);
+  try { const r = await fetch(url, Object.assign({ signal: ac.signal }, opt)); if (!r.ok) throw new Error('HTTP ' + r.status); return r; }
+  finally { clearTimeout(tm); }
+}
+async function fetchText(url, { direct = true } = {}) {
+  const enc = encodeURIComponent(url), errs = [];
+  const tries = [];
+  if (direct) tries.push(() => tFetch(url).then(r => r.text()));
+  if (hasLocalProxy) tries.push(() => tFetch(PROXY_PATH + '?url=' + enc, {}, 20000).then(r => r.text()));
+  tries.push(() => tFetch('https://api.allorigins.win/get?url=' + enc, {}, 15000).then(r => r.json()).then(j => { if (!j.contents) throw new Error('kosong'); return j.contents; }));
+  for (const t of tries) { try { return await t(); } catch (e) { errs.push(e.message); } }
+  throw new Error(errs.join(' | '));
+}
+async function fetchJSON(url, o) { const t = await fetchText(url, o); return JSON.parse(t); }
+
+async function detectLocalProxy() {
+  if (!location.protocol.startsWith('http')) return;
+  // Coba /api/proxy (Vercel) dulu, lalu /proxy (server.py lokal)
+  for (const p of ['/api/proxy', '/proxy']) {
+    try {
+      const r = await tFetch(p + '?url=' + encodeURIComponent('https://api.gold-api.com/price/XAU'), {}, 8000);
+      JSON.parse(await r.text());              // pastikan bukan halaman HTML 404
+      PROXY_PATH = p; hasLocalProxy = true; return;
+    } catch {}
+  }
+  hasLocalProxy = false;
+}
+
+// Harga emas (gold-api.com, CORS terbuka)
+async function getXAU() {
+  try {
+    const j = await fetchJSON('https://api.gold-api.com/price/XAU');
+    S.cache.xau = { v: j.price, at: j.updatedAt || new Date().toISOString() };
+    // simpan jejak harga 6 jam untuk menghitung reaksi rilis
+    (S.cache.xauTrail ||= []).push([Date.now(), j.price]);
+    S.cache.xauTrail = S.cache.xauTrail.filter(p => Date.now() - p[0] < 6 * 3600e3);
+    setSrc('XAU (gold-api.com)', true, 'live');
+  } catch (e) { setSrc('XAU (gold-api.com)', false, S.cache.xau ? 'pakai cache' : 'gagal'); }
+}
+// Yahoo chart → {price, prev}
+async function yahoo(sym, range = '5d', interval = '1d') {
+  const u = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=${range}&interval=${interval}`;
+  const j = await fetchJSON(u, { direct: false });
+  const r = j.chart.result[0];
+  return { price: r.meta.regularMarketPrice, prev: r.meta.chartPreviousClose ?? r.meta.previousClose, ts: r.timestamp, close: r.indicators.quote[0].close };
+}
+async function getDXY() {
+  try { const y = await yahoo('DX-Y.NYB'); S.cache.dxy = { v: y.price, prev: y.prev, at: new Date().toISOString(), how: 'Yahoo' }; setSrc('DXY', true, 'Yahoo'); return; } catch {}
+  // Cadangan: hitung DXY dari kurs harian (rumus ICE)
+  try {
+    const j = await (await tFetch('https://open.er-api.com/v6/latest/USD')).json(), R = j.rates;
+    const v = 50.14348112 * R.EUR ** 0.576 * R.JPY ** 0.136 * R.GBP ** 0.119 * R.CAD ** 0.091 * R.SEK ** 0.042 * R.CHF ** 0.036;
+    S.cache.dxy = { v, at: new Date(j.time_last_update_unix * 1000).toISOString(), how: '≈ dari kurs harian' };
+    setSrc('DXY', true, '≈ kurs harian');
+  } catch { setSrc('DXY', false, S.cache.dxy ? 'pakai cache' : 'gagal'); }
+}
+async function getTNX() {
+  try { const y = await yahoo('^TNX'); S.cache.tnx = { v: y.price, prev: y.prev, at: new Date().toISOString(), how: 'Yahoo' }; setSrc('US10Y', true, 'Yahoo'); return; } catch {}
+  // Cadangan: US Treasury (CORS terbuka, data penutupan harian)
+  try {
+    const yr = new Date().getUTCFullYear();
+    const csv = await (await tFetch(`https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/${yr}/all?type=daily_treasury_yield_curve&field_tdr_date_value=${yr}&page&_format=csv`)).text();
+    const lines = csv.trim().split('\n'), head = lines[0].split(','), i10 = head.findIndex(h => h.includes('10 Yr'));
+    const a = lines[1].split(','), b = lines[2]?.split(',');
+    S.cache.tnx = { v: +a[i10], prev: b ? +b[i10] : null, at: a[0], how: 'Treasury EOD ' + a[0] };
+    setSrc('US10Y', true, 'Treasury harian');
+  } catch { setSrc('US10Y', false, S.cache.tnx ? 'pakai cache' : 'gagal'); }
+}
+async function getOil() {
+  try {
+    const y = await yahoo('CL=F', '2mo', '1d');
+    const cutoff = Date.now() / 1000 - 30 * 86400;
+    let i0 = y.ts.findIndex(t => t >= cutoff); if (i0 < 0) i0 = 0;
+    const c0 = y.close.slice(i0).find(v => v != null), c1 = y.price;
+    const pct = r2((c1 - c0) / c0 * 100);
+    S.cache.oil = { v: c1, pct, at: new Date().toISOString() };
+    if (S.src['lead.crude30'] !== 'manual') { S.lead.crude30 = String(pct); S.src['lead.crude30'] = 'auto'; }
+    setSrc('Crude oil (Yahoo)', true, 'live');
+  } catch { setSrc('Crude oil (Yahoo)', false, S.cache.oil ? 'pakai cache' : 'gagal — input manual'); }
+}
+
+// Kalender ForexFactory (minggu ini) → jadwal eksak + forecast/previous otomatis
+async function getCalendar(force = false) {
+  // ForexFactory membatasi request: ambil ulang paling cepat tiap 30 menit
+  const c = S.cache.ff;
+  if (!force && c && Date.now() - new Date(c.at) < 30 * 60e3) { applyCalendar(c.data); setSrc('Kalender (ForexFactory)', true, 'cache ' + fmtWIB(new Date(c.at), { hour: '2-digit', minute: '2-digit', hour12: false })); return; }
+  try {
+    const data = await fetchJSON('https://nfs.faireconomy.media/ff_calendar_thisweek.json', { direct: true });
+    S.cache.ff = { data, at: new Date().toISOString() };
+    applyCalendar(data);
+    setSrc('Kalender (ForexFactory)', true, data.filter(e => e.country === 'USD').length + ' event USD');
+  } catch { setSrc('Kalender (ForexFactory)', false, S.cache.ff ? 'pakai cache' : 'butuh proxy lokal'); }
+}
+function parseFF(v) { return v ? num(v) : null; }
+// Isi forecast/previous dari kalender (hanya field yang belum diisi manual)
+function applyCalendar(data) {
+  const put = (path, key, val) => {
+    if (val === null) return;
+    const id = path + '.' + key;
+    if (S.src[id] === 'manual' || S.src[id] === 'BLS' || S.src[id] === 'dummy') return;
+    getScope(path)[key] = String(val); S.src[id] = 'FF';
+  };
+  const usd = data.filter(e => e.country === 'USD');
+  const by = t => usd.filter(e => e.title === t);
+  const one = t => by(t).slice(-1)[0];
+  let e;
+  if ((e = one('Non-Farm Employment Change'))) { put('rel.NFP', 'nfpF', parseFF(e.forecast)); put('rel.NFP', 'nfpP', parseFF(e.previous)); }
+  if ((e = one('Average Hourly Earnings m/m'))) { put('rel.NFP', 'aheF', parseFF(e.forecast)); put('rel.NFP', 'aheP', parseFF(e.previous)); }
+  if ((e = one('ADP Non-Farm Employment Change'))) { put('lead', 'adpF', parseFF(e.forecast)); put('lead', 'adpP', parseFF(e.previous)); }
+  const claims = by('Unemployment Claims');
+  if (claims.length) { const c = claims.slice(-1)[0]; put('lead', 'cl1P', parseFF(c.previous)); }
+  if ((e = one('Core CPI m/m'))) { put('rel.CPI', 'coreF', parseFF(e.forecast)); put('rel.CPI', 'coreP', parseFF(e.previous)); }
+  if ((e = one('CPI m/m'))) { put('rel.CPI', 'headF', parseFF(e.forecast)); put('rel.CPI', 'headP', parseFF(e.previous)); }
+  if ((e = one('Core PPI m/m'))) { put('rel.PPI', 'coreF', parseFF(e.forecast)); put('rel.PPI', 'coreP', parseFF(e.previous)); put('lead', 'ppiLastF', parseFF(e.forecast)); }
+  if ((e = one('PPI m/m'))) { put('rel.PPI', 'headF', parseFF(e.forecast)); put('rel.PPI', 'headP', parseFF(e.previous)); }
+  if ((e = one('Prelim UoM Inflation Expectations') || one('Revised UoM Inflation Expectations'))) { put('lead', 'umichP', parseFF(e.previous)); }
+  // Pidato anggota Fed minggu ini → daftar untuk diklasifikasi tone
+  S.cache.speakers = usd.filter(x => /FOMC Member|Fed Chair/i.test(x.title)).map(x => ({ d: x.date, who: x.title.replace(/ Speaks| Testifies/, '') }));
+}
+
+/* Data resmi BLS (CORS terbuka). API v1 tanpa key: maks 25 request/hari → di-cache.
+   Seri: CES0000000001 payroll, CES0500000003 AHE, CUSR0000SA0 CPI, CUSR0000SA0L1E core CPI,
+         WPSFD4 PPI final demand, WPSFD4131 PPI less foods & energy. */
+const BLS_SERIES = ['CES0000000001', 'CES0500000003', 'CUSR0000SA0', 'CUSR0000SA0L1E', 'WPSFD4', 'WPSFD4131'];
+const BLS_BY_TYPE = { NFP: ['CES0000000001', 'CES0500000003'], CPI: ['CUSR0000SA0', 'CUSR0000SA0L1E'], PPI: ['WPSFD4', 'WPSFD4131'] };
+async function getBLS(force = false, ids = BLS_SERIES) {
+  const c = S.cache.bls;
+  if (!force && c && Date.now() - new Date(c.at) < 6 * 3600e3) return c;
+  try {
+    // GET per seri (POST JSON diblokir preflight CORS di browser). Hanya seri yang diminta → hemat kuota.
+    const ser = Object.assign({}, c?.ser);
+    await Promise.all(ids.map(async id => {
+      // Key gratis (v2, 500 req/hari) jika diisi; tanpa key pakai v1 (25 req/hari)
+      const url = S.blsKey ? `https://api.bls.gov/publicAPI/v2/timeseries/data/${id}?registrationkey=${encodeURIComponent(S.blsKey)}`
+                           : 'https://api.bls.gov/publicAPI/v1/timeseries/data/' + id;
+      const j = await fetchJSON(url);
+      if (j.status !== 'REQUEST_SUCCEEDED') throw new Error(/threshold/.test(j.message?.join(' ')) ? 'kuota harian habis' : j.message?.join(' '));
+      const s = j.Results.series[0];
+      ser[id] = s.data.filter(d => d.period.startsWith('M')).map(d => ({ ym: `${d.year}-${d.period.slice(1)}`, v: +d.value }));
+    }));
+    S.cache.bls = { ser, at: new Date().toISOString() };
+    setSrc('Data resmi (BLS API)', true, 'periode ' + ser.CES0000000001[0].ym);
+    save(); return S.cache.bls;
+  } catch (e) { setSrc('Data resmi (BLS API)', false, (/kuota/.test(e.message) ? 'kuota habis' : 'gagal') + (c ? ' · cache' : '')); return c; }
+}
+// Hitung angka rilis terbaru dari level indeks BLS
+function blsLatest(bls) {
+  if (!bls) return null;
+  const S_ = bls.ser, pct = (a, i = 0) => r2((a[i].v / a[i + 1].v - 1) * 100);
+  const r1 = x => Math.round(x * 10) / 10;
+  return {
+    ym: S_.CES0000000001[0].ym,
+    nfp: Math.round(S_.CES0000000001[0].v - S_.CES0000000001[1].v),
+    ahe: r1(pct(S_.CES0500000003)),
+    cpiYm: S_.CUSR0000SA0[0].ym, cpi: r1(pct(S_.CUSR0000SA0)), cpiPrev: r1(pct(S_.CUSR0000SA0, 1)), core: r1(pct(S_.CUSR0000SA0L1E)),
+    ppiYm: S_.WPSFD4[0].ym, ppi: r1(pct(S_.WPSFD4)), ppiCore: r1(pct(S_.WPSFD4131))
+  };
+}
+// Bulan referensi yang diharapkan untuk event (bulan sebelum tanggal rilis)
+function refYM(ev) { const d = new Date(ev.t); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - 1); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`; }
+
+async function autoFetchActual(type, force = false) {
+  const ev = currentEvent(type);
+  const bls = await getBLS(force, S.cache.bls ? (BLS_BY_TYPE[type] || BLS_SERIES) : BLS_SERIES);
+  const L = blsLatest(bls);
+  if (!L) return { ok: false, msg: 'BLS tidak bisa diakses — silakan input manual.' };
+  const want = ev ? refYM(ev) : null;
+  const put = (path, k, v) => { getScope(path)[k] = String(v); S.src[path + '.' + k] = 'BLS'; };
+  if (type === 'NFP') {
+    if (want && L.ym !== want) return { ok: false, msg: `Data BLS terbaru = ${L.ym}, rilis ${want} belum keluar. Input manual jika perlu.` };
+    put('rel.NFP', 'nfpA', L.nfp); put('rel.NFP', 'aheA', L.ahe);
+  } else if (type === 'CPI') {
+    if (want && L.cpiYm !== want) return { ok: false, msg: `CPI terbaru di BLS = ${L.cpiYm}, rilis ${want} belum keluar.` };
+    put('rel.CPI', 'coreA', L.core); put('rel.CPI', 'headA', L.cpi);
+    if (!num(S.rel.CPI.headP)) put('rel.CPI', 'headP', L.cpiPrev);
+  } else if (type === 'PPI') {
+    if (want && L.ppiYm !== want) return { ok: false, msg: `PPI terbaru di BLS = ${L.ppiYm}, rilis ${want} belum keluar.` };
+    put('rel.PPI', 'coreA', L.ppiCore); put('rel.PPI', 'headA', L.ppi);
+  } else return { ok: false, msg: 'FOMC: keputusan diinput manual (tidak ada API resmi gratis).' };
+  save();
+  return { ok: true, msg: `Actual ${type} periode ${type === 'NFP' ? L.ym : type === 'CPI' ? L.cpiYm : L.ppiYm} diambil dari BLS.` };
+}
+
+/* ---------------- 5. RENDER UI ---------------- */
+function getScope(path) { return path.split('.').reduce((o, k) => (o[k] ??= {}), S); }
+function val(path, key) { return num(getScope(path)[key]); }
+const SIG = {
+  LONG: { txt: '⬆️ LONG XAU', cls: 'c-long', bg: 'bg-long', box: 'long', bar: 'var(--long)' },
+  SHORT: { txt: '⬇️ SHORT XAU', cls: 'c-short', bg: 'bg-short', box: 'short', bar: 'var(--short)' },
+  NETRAL: { txt: '↔️ NETRAL', cls: 'c-neutral', bg: 'bg-neutral', box: 'neutral', bar: 'var(--neutral)' }
+};
+
+// Elemen input berikut badge sumber
+function inp(path, key, ph = '', w = '') {
+  const v = getScope(path)[key] ?? '', s = S.src[path + '.' + key];
+  const b = s && s !== 'manual' ? `<span class="badge bg-dim absolute -top-2 right-1">${esc(s)}</span>` : '';
+  return `<div class="relative ${w}">${b}<input class="f text-sm" data-path="${path}" data-key="${key}" value="${esc(v)}" placeholder="${esc(ph)}" inputmode="decimal"></div>`;
+}
+function chip(score) {
+  if (score === null) return '<span class="badge bg-dim">n/a</span>';
+  return score > 0 ? '<span class="badge bg-short">USD ▲</span>' : score < 0 ? '<span class="badge bg-long">USD ▼</span>' : '<span class="badge bg-neutral">netral</span>';
+}
+function row(label, inputsHtml, score, sub = '') {
+  return `<div class="grid grid-cols-[minmax(0,1.3fr)_minmax(0,2fr)_60px] gap-2 items-center">
+    <div class="text-sm leading-tight">${label}${sub ? `<div class="muted text-[11px]">${sub}</div>` : ''}</div>
+    <div class="flex gap-1.5">${inputsHtml}</div><div class="text-right">${chip(score)}</div></div>`;
+}
+const cmp = (a, b, invert = false) => (a === null || b === null) ? null : (a > b ? 1 : a < b ? -1 : 0) * (invert ? -1 : 1);
+
+// Definisi panel pre-news per jenis: return {html, rows(score)}
+function preRows(type) {
+  const L = 'lead', g = k => val(L, k);
+  if (type === 'NFP') return [
+    { html: row('ADP Employment', inp(L, 'adpA', 'actual K', 'flex-1') + inp(L, 'adpF', 'fcst', 'flex-1') + inp(L, 'adpP', 'prev', 'flex-1'), cmp(g('adpA'), g('adpF')), 'actual / forecast / previous'), score: cmp(g('adpA'), g('adpF')) },
+    { html: row('ISM Manufacturing Employment', inp(L, 'ismMfgEmp', 'actual', 'flex-1') + '<span class="muted text-xs self-center px-1">vs 50</span>', cmp(g('ismMfgEmp'), g('ismMfgEmp') === null ? null : 50)), score: cmp(g('ismMfgEmp'), g('ismMfgEmp') === null ? null : 50) },
+    { html: row('ISM Services Employment', inp(L, 'ismSvcEmp', 'actual', 'flex-1') + '<span class="muted text-xs self-center px-1">vs 50</span>', cmp(g('ismSvcEmp'), g('ismSvcEmp') === null ? null : 50)), score: cmp(g('ismSvcEmp'), g('ismSvcEmp') === null ? null : 50) },
+    { html: row('Initial Jobless Claims (minggu ini)', inp(L, 'cl1A', 'actual K', 'flex-1') + inp(L, 'cl1P', 'prev', 'flex-1'), cmp(g('cl1A'), g('cl1P'), true), 'klaim turun = USD ▲'), score: cmp(g('cl1A'), g('cl1P'), true) },
+    { html: row('Initial Jobless Claims (minggu lalu)', inp(L, 'cl2A', 'actual K', 'flex-1') + inp(L, 'cl2P', 'prev', 'flex-1'), cmp(g('cl2A'), g('cl2P'), true)), score: cmp(g('cl2A'), g('cl2P'), true) }
+  ];
+  if (type === 'CPI') return [
+    { html: row('PPI bulan lalu', inp(L, 'ppiLastA', 'actual %', 'flex-1') + inp(L, 'ppiLastF', 'fcst', 'flex-1'), cmp(g('ppiLastA'), g('ppiLastF')), 'actual / forecast'), score: cmp(g('ppiLastA'), g('ppiLastF')) },
+    { html: row('ISM Prices Paid Manufacturing', inp(L, 'ismPPmA', 'actual', 'flex-1') + inp(L, 'ismPPmP', 'prev', 'flex-1'), cmp(g('ismPPmA'), g('ismPPmP'))), score: cmp(g('ismPPmA'), g('ismPPmP')) },
+    { html: row('ISM Prices Paid Services', inp(L, 'ismPPsA', 'actual', 'flex-1') + inp(L, 'ismPPsP', 'prev', 'flex-1'), cmp(g('ismPPsA'), g('ismPPsP'))), score: cmp(g('ismPPsA'), g('ismPPsP')) },
+    { html: row('Michigan Inflation Expectations', inp(L, 'umichA', 'actual %', 'flex-1') + inp(L, 'umichP', 'prev', 'flex-1'), cmp(g('umichA'), g('umichP'))), score: cmp(g('umichA'), g('umichP')) }
+  ];
+  if (type === 'PPI') {
+    const oil = g('crude30'), oilScore = oil === null ? null : oil > 3 ? 1 : oil < -3 ? -1 : 0;
+    const s50 = k => g(k) === null ? null : cmp(g(k), 50);
+    return [
+      { html: row('ISM Prices Paid Manufacturing', inp(L, 'ismPPmA', 'actual', 'flex-1') + '<span class="muted text-xs self-center px-1">vs 50</span>', s50('ismPPmA')), score: s50('ismPPmA') },
+      { html: row('ISM Prices Paid Services', inp(L, 'ismPPsA', 'actual', 'flex-1') + '<span class="muted text-xs self-center px-1">vs 50</span>', s50('ismPPsA')), score: s50('ismPPsA') },
+      { html: row('Tren crude oil 30 hari', inp(L, 'crude30', '% change', 'flex-1') + '<span class="muted text-xs self-center px-1">%</span>', oilScore, '±3% = ambang'), score: oilScore },
+      { html: `<div class="text-xs bg-neutral rounded-lg px-3 py-2 font-semibold">PPI = leading indicator CPI minggu depan</div>`, score: undefined }
+    ];
+  }
+  // FOMC
+  const toneC = toneCounts();
+  const tScore = toneC.h + toneC.d === 0 ? null : toneC.h > toneC.d ? 1 : toneC.h < toneC.d ? -1 : 0;
+  const f = fomcProbs(); const exp = f.top;
+  return [
+    { html: `<div class="text-sm font-semibold">CME FedWatch probability <span class="muted font-normal text-xs">(input dari FedWatch)</span></div>
+      <div class="grid grid-cols-3 gap-2">${['pHold:Hold', 'pCut:Cut', 'pHike:Hike'].map(s => { const [k, l] = s.split(':'); return `<label class="text-xs muted">${l} %${inp(L, k, '%')}</label>`; }).join('')}</div>
+      <div class="flex flex-wrap gap-3 text-xs"><a class="underline muted" target="_blank" rel="noopener" href="https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html">Buka FedWatch ↗</a>
+      <button class="underline muted" id="btnFwFrame">Tampilkan embed</button></div>
+      <div id="fwFrame"></div>`, score: undefined },
+    { html: row(`Tone pidato Fed (6 minggu)`, `<div class="text-sm num"><span class="c-short font-bold">${toneC.h} hawkish</span> · <span class="c-long font-bold">${toneC.d} dovish</span> · <span class="muted">${toneC.n} netral</span></div>`, tScore), score: tScore },
+    { html: toneEditor(), score: undefined },
+    { html: row('Rate saat ini vs ekspektasi', `<div class="text-sm num">${esc(S.fedRate)} → <b>${exp ? exp.label + ' ' + exp.p + '%' : '—'}</b></div>`, null), score: undefined }
+  ];
+}
+function fomcProbs() {
+  const p = { hold: val('lead', 'pHold'), cut: val('lead', 'pCut'), hike: val('lead', 'pHike') };
+  const arr = [['hold', 'HOLD'], ['cut', 'CUT -25'], ['hike', 'HIKE +25']].filter(([k]) => p[k] !== null).map(([k, l]) => ({ k, label: l, p: p[k] }));
+  arr.sort((a, b) => b.p - a.p);
+  return { p, top: arr[0] };
+}
+function toneCounts() {
+  const since = Date.now() - 42 * 86400e3, c = { h: 0, d: 0, n: 0 };
+  S.tones.filter(t => new Date(t.d) >= since).forEach(t => c[t.tone[0]]++);
+  return c;
+}
+function toneEditor() {
+  const sp = (S.cache.speakers || []).filter(s => !S.tones.some(t => t.d === s.d && t.who === s.who));
+  const recent = S.tones.slice(-6).reverse();
+  return `<details class="bg-[#14142a] rounded-lg p-3 text-xs"><summary class="font-semibold">Kelola tone pidato (${S.tones.length} tercatat)</summary>
+    <div class="mt-2 space-y-2">
+      ${sp.length ? `<div class="muted">Dari kalender minggu ini — klik untuk klasifikasi:</div>` + sp.map(s => `<div class="flex items-center gap-2"><span class="flex-1">${esc(fmtWIB(new Date(s.d), { day: '2-digit', month: 'short' }))} · ${esc(s.who)}</span>${['hawkish', 'netral', 'dovish'].map(t => `<button class="badge ${t === 'hawkish' ? 'bg-short' : t === 'dovish' ? 'bg-long' : 'bg-neutral'}" data-tone="${t}" data-who="${esc(s.who)}" data-d="${esc(s.d)}">${t}</button>`).join('')}</div>`).join('') : ''}
+      <div class="flex gap-1.5"><input id="toneWho" class="f text-xs" placeholder="Nama pejabat Fed"><select id="toneSel" class="f text-xs !w-28"><option>hawkish</option><option>netral</option><option>dovish</option></select><button id="btnAddTone" class="btn !min-h-0 !py-1 text-xs">+</button></div>
+      ${recent.map(t => `<div class="flex justify-between muted"><span>${esc(fmtWIB(new Date(t.d), { day: '2-digit', month: 'short' }))} · ${esc(t.who)}</span><span class="${t.tone === 'hawkish' ? 'c-short' : t.tone === 'dovish' ? 'c-long' : 'c-neutral'}">${t.tone} <button data-deltone="${S.tones.indexOf(t)}" class="ml-1 muted">✕</button></span></div>`).join('')}
+    </div></details>`;
+}
+
+// Form input rilis per jenis
+function liveForm(type) {
+  const P = 'rel.' + type, lab = (t, s = '') => `<div class="text-xs muted mb-1">${t}${s}</div>`;
+  const trio = (pre, name, unit) => `<div>${lab(name, unit)}<div class="grid grid-cols-3 gap-1.5">${inp(P, pre + 'A', 'Actual')}${inp(P, pre + 'F', 'Forecast')}${inp(P, pre + 'P', 'Previous')}</div></div>`;
+  if (type === 'NFP') return `<div class="grid md:grid-cols-2 gap-4">${trio('nfp', 'Non-Farm Payrolls', ' (K)')}${trio('ahe', 'Average Hourly Earnings m/m', ' (%)')}</div>`;
+  if (type === 'CPI') return `<div class="grid md:grid-cols-2 gap-4">${trio('core', 'Core CPI m/m', ' (%)')}${trio('head', 'Headline CPI m/m', ' (%)')}</div>`;
+  if (type === 'PPI') return `<div class="grid md:grid-cols-2 gap-4">${trio('core', 'Core PPI m/m', ' (%)')}${trio('head', 'Headline PPI m/m', ' (%)')}</div>`;
+  const R = S.rel.FOMC;
+  return `<div class="grid md:grid-cols-3 gap-4">
+    <div>${lab('Keputusan suku bunga')}<select class="f text-sm" data-path="rel.FOMC" data-key="bps">
+      <option value="">— belum rilis —</option>${[['-50', 'Cut -50bps'], ['-25', 'Cut -25bps'], ['0', 'Hold'], ['25', 'Hike +25bps'], ['50', 'Hike +50bps']].map(([v, l]) => `<option value="${v}" ${String(R.bps ?? '') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+    <div>${lab('Tone statement / press conference')}<select class="f text-sm" data-path="rel.FOMC" data-key="tone">
+      <option value="">— belum ada —</option>${['hawkish', 'netral', 'dovish'].map(t => `<option ${R.tone === t ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+    <div class="text-xs muted self-end">Probabilitas FedWatch diisi di panel Pre-News.</div></div>`;
+}
+
+// Hitung prediksi untuk jenis tertentu
+function predict(type) {
+  const g = k => val('rel.' + type, k);
+  let eng = null;
+  if (type === 'NFP') eng = Engine.nfp({ nfpA: g('nfpA'), nfpF: g('nfpF'), aheA: g('aheA'), aheF: g('aheF') });
+  if (type === 'CPI') eng = Engine.cpi({ coreA: g('coreA'), coreF: g('coreF'), headA: g('headA'), headF: g('headF'), headP: g('headP') });
+  if (type === 'PPI') eng = Engine.ppi({ coreA: g('coreA'), coreF: g('coreF'), headA: g('headA'), headF: g('headF') });
+  const bias = Engine.bias(preRows(type).filter(r => r.score !== undefined));
+  if (type === 'FOMC') {
+    const tc = toneCounts(), preTone = tc.h > tc.d ? 'hawkish' : tc.d > tc.h ? 'dovish' : 'netral';
+    const R = S.rel.FOMC;
+    eng = Engine.fomc({ pHold: val('lead', 'pHold'), pCut: val('lead', 'pCut'), pHike: val('lead', 'pHike'),
+      actualBps: R.bps === '' || R.bps === undefined ? null : +R.bps, tone: R.tone || null, preTone });
+    if (eng) eng.stage = eng.pending || (R.bps === undefined || R.bps === '') && !R.tone ? 'PRA-RILIS' : 'HASIL ENGINE';
+    return { eng, bias };
+  }
+  if (eng) eng.stage = 'HASIL ENGINE';
+  return { eng, bias };
+}
+
+let lastDigits = '';
+function renderClock() {
+  const now = new Date();
+  $('clockWib').textContent = fmtWIB(now, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).replace(/\./g, ':');
+  $('dateWib').textContent = fmtWIB(now, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) + ' · WIB';
+  const open = isMarketOpen(now);
+  $('mktDot').style.background = open ? 'var(--long)' : 'var(--short)';
+  $('mktLabel').textContent = open ? 'Market buka · auto-refresh 5 menit' : 'Market tutup';
+  renderCountdown(now);
+}
+// Market emas: Minggu ~22:00 UTC s/d Jumat ~21:00 UTC
+function isMarketOpen(d) { const day = d.getUTCDay(), h = d.getUTCHours(); return !(day === 6 || (day === 5 && h >= 21) || (day === 0 && h < 22)); }
+
+let SCHED = [];
+function nextEvent(now = new Date()) { return SCHED.find(e => e.t > now); }
+function currentEvent(type) {  // event jenis ini yang paling relevan: rilis ≤ 36 jam lalu, atau berikutnya
+  const now = Date.now();
+  const recent = SCHED.filter(e => e.type === type && e.t <= now && now - e.t < 36 * 3600e3).pop();
+  return recent || SCHED.find(e => e.type === type && e.t > now);
+}
+function renderCountdown(now) {
+  const ev = nextEvent(now);
+  const justReleased = SCHED.filter(e => e.t <= now && now - e.t < 3 * 3600e3).pop();
+  if (!ev) { $('cdLabel').textContent = 'Tidak ada jadwal'; return; }
+  const ms = ev.t - now, h = Math.floor(ms / 3600e3), m = Math.floor(ms % 3600e3 / 60e3), s = Math.floor(ms % 60e3 / 1e3);
+  const d = Math.floor(h / 24), hh = h % 24;
+  const urgent = ms < 3600e3;
+  const short = d > 0 ? `${d}h ${hh}j ${m}m` : `${h}j ${m}m`;
+  $('cdLabel').innerHTML = `<span class="${urgent ? 'c-short' : ''}">${ev.type} rilis dalam ${short}</span>` +
+    (justReleased ? ` <span class="badge bg-neutral align-middle">${justReleased.type} baru rilis — input actual</span>` : '');
+  $('cdWhen').textContent = fmtWIB(ev.t, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) + ' WIB · sumber: ' + ev.src;
+  const parts = d > 0 ? [[d, 'h'], [hh, 'j'], [m, 'm'], [s, 'd']] : [[h, 'j'], [m, 'm'], [s, 'd']];
+  const key = parts.map(p => p[0]).join(':');
+  if (key !== lastDigits) {
+    const prev = lastDigits.split(':');
+    $('cdDigits').className = 'num font-extrabold text-4xl sm:text-5xl tracking-tight ' + (urgent ? 'c-short urgent' : '');
+    $('cdDigits').innerHTML = parts.map(([v, u], i) => `<span class="digit ${String(v) !== prev[i] ? 'tick' : ''}">${String(v).padStart(2, '0')}</span><span class="text-base muted font-semibold mr-1">${u}</span>`).join('');
+    lastDigits = key;
+  }
+}
+function renderSchedule() {
+  SCHED = buildSchedule();
+  const now = Date.now();
+  const up = SCHED.filter(e => e.t > now - 3 * 3600e3).slice(0, 6);
+  $('schedList').innerHTML = up.map(e => {
+    const past = e.t <= now, soon = e.t - now < 3600e3 && !past;
+    return `<div class="flex items-center gap-2 bg-[#14142a] rounded-lg px-3 py-2 ${past ? 'opacity-60' : ''}">
+      <span class="badge ${soon ? 'bg-short' : 'bg-dim'} w-12 text-center">${e.type}</span>
+      <span class="num flex-1">${fmtWIB(e.t, { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })}</span>
+      <span class="text-[10px] muted">${past ? 'rilis' : e.src === 'estimasi' ? 'estimasi' : e.src}</span></div>`;
+  }).join('');
+}
+function renderSchedEditor() {
+  const now = Date.now(), up = SCHED.filter(e => e.t > now - 86400e3).slice(0, 8);
+  const toLocal = t => new Date(t.getTime() + 7 * 3600e3).toISOString().slice(0, 16); // WIB untuk datetime-local
+  $('schedEditor').innerHTML = `<div class="text-xs muted mb-2">Ubah jam rilis (WIB) jika berbeda dari kalender resmi. Tanggal NFP/CPI/PPI berlabel "estimasi" mengikuti pola BLS — cek di Investing/ForexFactory.</div>
+    <div class="grid sm:grid-cols-2 gap-2">${up.map(e => `<label class="flex items-center gap-2 text-sm"><span class="w-12 font-bold">${e.type}</span>
+    <input type="datetime-local" class="f text-sm" data-sched="${e.key}" value="${toLocal(e.t)}"></label>`).join('')}</div>
+    <button id="btnResetSched" class="text-xs muted underline mt-2">Reset ke default</button>`;
+}
+
+function renderTabs() {
+  const t = activeTab();
+  document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
+}
+function activeTab() { return S.tab || nextEvent()?.type || 'NFP'; }
+
+function renderPre() {
+  const t = activeTab(), ev = currentEvent(t);
+  $('preType').textContent = '· ' + t;
+  const days = ev ? (ev.t - Date.now()) / 86400e3 : null;
+  const inWin = days !== null && days <= 7 && days >= -1.5;
+  $('preWindow').className = 'badge ' + (inWin ? 'bg-long' : 'bg-dim');
+  $('preWindow').textContent = ev ? (days > 0 ? `H-${Math.ceil(days)}` : 'hari rilis') : '';
+  $('preNote').textContent = ev
+    ? (inWin ? `Jendela pengumpulan data aktif (H-7 s/d H-1) untuk ${t} ${fmtWIB(ev.t, { day: 'numeric', month: 'short' })}.`
+      : `Jendela H-7 dimulai ${fmtWIB(new Date(ev.t - 7 * 86400e3), { day: 'numeric', month: 'long' })}. Data tetap bisa diisi sekarang.`)
+    : '';
+  $('preBody').innerHTML = preRows(t).map(r => r.html).join('');
+}
+function renderLive() {
+  const t = activeTab();
+  $('liveType').textContent = '· ' + t;
+  $('liveBody').innerHTML = liveForm(t);
+  const e = S.evalr[t];
+  $('xauAtRelease').value = e?.xauAtRelease ?? '';
+  $('xauReactionManual').value = e?.reactionManual ?? '';
+  $('btnFetchActual').classList.toggle('hidden', t === 'FOMC');
+}
+// Bagian yang dihitung ulang setiap ada input (tanpa merender ulang form)
+function renderComputed() {
+  const t = activeTab(), { eng, bias } = predict(t);
+  // Bias meter
+  const rows = preRows(t).filter(r => r.score !== undefined);
+  document.querySelectorAll('#preBody .grid > div:last-child').forEach((el, i) => { if (rows[i]) el.innerHTML = chip(rows[i].score); });
+  if (bias) {
+    $('meterNeedle').style.left = `calc(${50 + bias.norm * 48}% - 2px)`;
+    $('meterText').innerHTML = `<span class="${SIG[bias.signal].cls}">${bias.signal === 'SHORT' ? 'Bullish USD' : bias.signal === 'LONG' ? 'Bearish USD' : 'Netral'}</span> <span class="muted font-normal">· skor ${sgn(bias.total, 0)} dari ${bias.n} indikator</span>`;
+  } else { $('meterNeedle').style.left = 'calc(50% - 2px)'; $('meterText').innerHTML = '<span class="muted font-normal">Data tidak tersedia — input manual di atas.</span>'; }
+
+  // Prediction box
+  const useEng = eng && !(t === 'FOMC' && eng.pending && bias);
+  let p = eng, stage = eng?.stage;
+  if (!eng && bias) { p = { signal: bias.signal, strength: bias.strength, confidence: bias.confidence, reason: `Belum ada actual. Bias dari ${bias.n} leading indicator (skor ${sgn(bias.total, 0)}). Isi actual di Live Input saat rilis untuk prediksi final.` }; stage = 'BIAS PRA-RILIS'; }
+  const fin = S.evalr[t];
+  if (fin && fin.result && eng) stage = 'FINAL';
+  $('pbType').textContent = t;
+  const box = $('pbox');
+  box.classList.remove('long', 'short', 'neutral');
+  if (!p) {
+    $('pbSignal').innerHTML = '<span class="muted text-2xl">Data tidak tersedia — input manual</span>';
+    $('pbStrength').textContent = '—'; $('pbConf').textContent = '—'; $('pbConfBar').style.width = '0';
+    $('pbReason').textContent = 'Isi panel Pre-News (bias) atau Live Actual Input (prediksi final). Tombol "Isi data dummy" untuk mencoba engine tanpa internet.';
+    $('pbStage').textContent = 'MENUNGGU DATA'; $('pbStage').className = 'badge bg-dim'; $('pbVerify').innerHTML = ''; return;
+  }
+  const sg = SIG[p.signal];
+  box.classList.add(sg.box);
+  $('pbSignal').innerHTML = `<span class="${sg.cls}">${p.isBias ? (p.signal === 'SHORT' ? '⬇️ BIAS SHORT XAU' : '⬆️ BIAS LONG XAU') : sg.txt}</span>` +
+    (p.isBias ? `<div class="text-sm font-semibold mt-3 ${sg.cls}">${esc(p.label)}</div>` : '') +
+    (p.label && !p.isBias ? `<div class="text-sm font-semibold mt-3 c-neutral">${esc(p.label)}</div>` : '');
+  $('pbStrength').innerHTML = `<span class="${p.strength === 'KUAT' ? sg.cls : p.strength === 'LEMAH' ? 'muted' : ''}">${p.strength || '—'}</span>`;
+  $('pbConf').textContent = p.confidence != null ? p.confidence + '%' : 'n/a';
+  $('pbConfBar').style.width = (p.confidence ?? 0) + '%'; $('pbConfBar').style.background = sg.bar;
+  $('pbReason').innerHTML = esc(p.reason) + (t === 'PPI' && eng ? '<div class="muted text-xs mt-1">Bukan sinyal trading hari ini — prediksi arah CPI minggu depan.</div>' : '');
+  $('pbStage').textContent = stage; $('pbStage').className = 'badge ' + (stage === 'FINAL' ? sg.bg : stage === 'HASIL ENGINE' ? 'bg-neutral' : 'bg-dim');
+  renderVerify(t, p);
+}
+// Reaksi XAU = harga sekarang − harga saat rilis
+function reactionOf(t) {
+  const e = S.evalr[t]; if (!e) return null;
+  if (num(e.reactionManual) !== null) return num(e.reactionManual);
+  if (num(e.xauAtRelease) === null || !S.cache.xau) return null;
+  return r2(S.cache.xau.v - num(e.xauAtRelease));
+}
+function renderVerify(t, p) {
+  const e = S.evalr[t];
+  if (!e) { $('pbVerify').innerHTML = ''; return; }
+  const rx = reactionOf(t), v = Engine.verdict(e.signal, rx);
+  const mv = rx === null ? 'menunggu harga' : `XAU ${rx < 0 ? 'turun' : 'naik'} ${rx < 0 ? '-' : '+'}$${Math.abs(rx).toFixed(2)}`;
+  const vt = v === 'BENAR' ? '<span class="c-long">✅ BENAR</span>' : v === 'SALAH' ? '<span class="c-short">❌ SALAH</span>' : v === 'FLAT' ? '<span class="c-neutral">➖ FLAT</span>' : '';
+  $('pbVerify').innerHTML = `<div class="bg-[#14142a] rounded-lg px-3 py-2 num">Prediksi: <b class="${SIG[e.signal]?.cls}">${e.signal}</b> | Actual: ${mv} ${vt}
+    <div class="text-[11px] muted font-normal mt-0.5">Harga saat rilis $${num(e.xauAtRelease)?.toFixed(2) ?? '—'} · dicatat ${fmtWIB(new Date(e.at), { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })} WIB</div></div>`;
+  e.result = v;
+}
+
+function renderSidebar() {
+  const c = S.cache, ago = iso => iso ? fmtWIB(new Date(iso), { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short', hour12: false }) : '';
+  const delta = (v, p, d = 2) => p ? `<span class="${v >= p ? 'c-long' : 'c-short'}">${sgn(v - p, d)}</span> · ` : '';
+  $('sbXau').textContent = c.xau ? '$' + c.xau.v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+  $('sbXauMeta').textContent = c.xau ? 'gold-api.com · ' + ago(c.xau.at) + ' WIB' : 'Data tidak tersedia';
+  $('sbDxy').textContent = c.dxy ? c.dxy.v.toFixed(2) : '—';
+  $('sbDxyMeta').innerHTML = c.dxy ? delta(c.dxy.v, c.dxy.prev) + esc(c.dxy.how) : 'n/a';
+  $('sbTnx').textContent = c.tnx ? c.tnx.v.toFixed(2) + '%' : '—';
+  $('sbTnxMeta').innerHTML = c.tnx ? delta(c.tnx.v, c.tnx.prev) + esc(c.tnx.how) : 'n/a';
+  $('sbOil').innerHTML = c.oil ? `<span class="${c.oil.pct >= 0 ? 'c-short' : 'c-long'}">${sgn(c.oil.pct, 1)}%</span>` : '—';
+  $('sbOilMeta').textContent = c.oil ? `WTI $${c.oil.v.toFixed(2)}` : 'n/a';
+  $('sbFed').value = S.fedRate;
+}
+function renderSources() {
+  $('srcList').innerHTML = Object.entries(srcStatus).map(([n, s]) => `<li class="flex items-center gap-2"><span class="dot" style="background:${s.ok ? 'var(--long)' : 'var(--short)'}"></span><span class="flex-1">${esc(n)}</span><span class="text-[11px] muted">${esc(s.note)}</span></li>`).join('') || '<li class="muted">Memuat…</li>';
+  const ffBad = srcStatus['Kalender (ForexFactory)'] && !srcStatus['Kalender (ForexFactory)'].ok;
+  $('proxyHint').innerHTML = hasLocalProxy ? `Proxy aktif (<code>${PROXY_PATH}</code>).`
+    : `Proxy tidak terdeteksi — sebagian sumber (kalender, DXY live, crude) diblokir CORS. Deploy ke Vercel bersama folder <code class="text-white">api/</code>, atau jalankan <code class="text-white">python server.py</code> lokal.${ffBad ? ' Kalender memakai jadwal estimasi.' : ''}`;
+}
+
+function renderHistory() {
+  const f = $('histFilter').value, since = Date.now() - 366 * 86400e3;
+  const rows = S.history.filter(h => (f === 'ALL' || h.type === f) && new Date(h.date) >= since).sort((a, b) => new Date(b.date) - new Date(a.date));
+  $('histBody').innerHTML = rows.map(h => {
+    const sg = SIG[h.signal] || SIG.NETRAL;
+    const res = h.result === 'BENAR' ? '<span class="c-long font-bold">✅ BENAR</span>' : h.result === 'SALAH' ? '<span class="c-short font-bold">❌ SALAH</span>' : `<span class="muted">${esc(h.result || '—')}</span>`;
+    return `<tr><td>${esc(fmtWIB(new Date(h.date), { day: '2-digit', month: 'short', year: '2-digit' }))}${h.dummy ? ' <span class="badge bg-neutral">dummy</span>' : ''}</td>
+      <td class="font-bold">${esc(h.type)}</td><td class="muted">${esc(h.avf)}</td>
+      <td><span class="badge ${sg.bg}">${esc(h.signal)}</span> <span class="muted text-xs">${esc(h.strength || '')} ${h.confidence ? h.confidence + '%' : ''}</span></td>
+      <td class="${h.reaction < 0 ? 'c-short' : 'c-long'}">${h.reaction === null || h.reaction === undefined ? '—' : (h.reaction < 0 ? '-' : '+') + '$' + Math.abs(h.reaction).toFixed(0)}</td>
+      <td>${res}</td><td><button class="muted hover:text-white" data-delhist="${esc(h.id)}" title="Hapus">✕</button></td></tr>`;
+  }).join('') || `<tr><td colspan="7" class="muted text-center py-6">Belum ada riwayat. Setelah rilis: UPDATE ACTUAL → Simpan. Atau klik "+ Contoh dummy" untuk mencoba.</td></tr>`;
+  // Akurasi per jenis
+  const acc = TYPES.map(t => {
+    const r = S.history.filter(h => h.type === t && new Date(h.date) >= since && (h.result === 'BENAR' || h.result === 'SALAH'));
+    if (!r.length) return `${t}: —`;
+    const pct = Math.round(r.filter(h => h.result === 'BENAR').length / r.length * 100);
+    return `<span class="${pct >= 60 ? 'c-long' : pct >= 50 ? 'c-neutral' : 'c-short'}">${t}: ${pct}%</span> <span class="muted font-normal text-xs">(${r.length})</span>`;
+  });
+  $('accuracy').innerHTML = 'Akurasi · ' + acc.join(' <span class="muted">|</span> ');
+}
+
+function renderAll() { renderSchedule(); renderTabs(); renderPre(); renderLive(); renderComputed(); renderSidebar(); renderHistory(); renderSources(); }
+
+/* ---------------- EVENT HANDLER ---------------- */
+document.addEventListener('input', e => {
+  const el = e.target;
+  if (el.dataset.path) {
+    getScope(el.dataset.path)[el.dataset.key] = el.value;
+    S.src[el.dataset.path + '.' + el.dataset.key] = 'manual';
+    el.parentElement.querySelector('.badge')?.remove();
+    save(); renderComputed();
+    if (el.dataset.path === 'lead' && /^p(Hold|Cut|Hike)$/.test(el.dataset.key)) refreshFomcRateLine();
+  }
+  if (el.dataset.sched) { const [d, t] = el.value.split('T'); if (d && t) { const [y, m, dd] = d.split('-').map(Number), [h, mi] = t.split(':').map(Number); S.sched[el.dataset.sched] = new Date(Date.UTC(y, m - 1, dd, h - 7, mi)).toISOString(); save(); renderSchedule(); } }
+  if (el.id === 'xauAtRelease' || el.id === 'xauReactionManual') {
+    const t = activeTab(); if (!S.evalr[t]) return;
+    S.evalr[t][el.id === 'xauAtRelease' ? 'xauAtRelease' : 'reactionManual'] = el.value; save(); renderComputed();
+  }
+  if (el.id === 'sbFed') { S.fedRate = el.value; save(); }
+  if (el.id === 'blsKey') { S.blsKey = el.value.trim(); save(); }
+});
+document.addEventListener('change', e => { if (e.target.tagName === 'SELECT' && e.target.dataset.path) e.target.dispatchEvent(new Event('input', { bubbles: true })); });
+function refreshFomcRateLine() { /* render ulang panel FOMC tanpa kehilangan fokus input probabilitas */
+  const f = fomcProbs(), el = [...document.querySelectorAll('#preBody .text-sm.num')].find(x => x.textContent.includes('→')); if (el) el.innerHTML = `${esc(S.fedRate)} → <b>${f.top ? f.top.label + ' ' + f.top.p + '%' : '—'}</b>`;
+}
+
+document.addEventListener('click', async e => {
+  const el = e.target.closest('button,[data-tab]'); if (!el) return;
+  if (el.dataset.tab) { S.tab = el.dataset.tab; save(); renderTabs(); renderPre(); renderLive(); renderComputed(); return; }
+  if (el.dataset.tone) { S.tones.push({ d: el.dataset.d, who: el.dataset.who, tone: el.dataset.tone }); save(); renderPre(); renderComputed(); return; }
+  if (el.dataset.deltone) { S.tones.splice(+el.dataset.deltone, 1); save(); renderPre(); renderComputed(); return; }
+  if (el.dataset.delhist) { S.history = S.history.filter(h => h.id !== el.dataset.delhist); save(); renderHistory(); return; }
+  switch (el.id) {
+    case 'btnRefresh': refreshAll(true); break;
+    case 'btnEditSched': $('schedEditor').classList.toggle('hidden'); renderSchedEditor(); break;
+    case 'btnResetSched': S.sched = {}; save(); renderSchedule(); renderSchedEditor(); break;
+    case 'btnAddTone': { const who = $('toneWho').value.trim(); if (!who) return; S.tones.push({ d: new Date().toISOString(), who, tone: $('toneSel').value }); save(); renderPre(); renderComputed(); break; }
+    case 'btnFwFrame': $('fwFrame').innerHTML = `<iframe src="https://cmegroup-tools.quikstrike.net/User/QuikStrikeTools.aspx?viewitemid=IntegratedFedWatchTool" class="w-full h-[480px] rounded-lg bg-white mt-2" loading="lazy"></iframe><div class="text-[11px] muted mt-1">Jika kosong, CME memblokir embed — gunakan tautan "Buka FedWatch".</div>`; break;
+    case 'btnFetchActual': {
+      const t = activeTab(); $('liveMsg').textContent = 'Mengambil data BLS…';
+      const r = await autoFetchActual(t, true); $('liveMsg').textContent = r.msg; renderLive(); renderComputed(); break;
+    }
+    case 'btnUpdateActual': updateActual(); break;
+    case 'btnSaveHistory': saveToHistory(); break;
+    case 'btnDummy': loadDummy(activeTab()); break;
+    case 'btnClearInputs': { const t = activeTab(); S.rel[t] = {}; delete S.evalr[t]; Object.keys(S.src).filter(k => k.startsWith('rel.' + t + '.')).forEach(k => delete S.src[k]); save(); renderLive(); renderComputed(); break; }
+    case 'btnSeedHist': seedHistory(); break;
+    case 'btnClearHist': if (confirm('Hapus semua history?')) { S.history = []; save(); renderHistory(); } break;
+    case 'btnExport': { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(S.history, null, 2)], { type: 'application/json' })); a.download = 'xauusd-history.json'; a.click(); break; }
+  }
+});
+$('histFilter').addEventListener('change', renderHistory);
+$('fileImport').addEventListener('change', async e => {
+  try { const arr = JSON.parse(await e.target.files[0].text()); if (!Array.isArray(arr)) throw 0; const ids = new Set(S.history.map(h => h.id)); arr.forEach(h => { if (!ids.has(h.id)) S.history.push(h); }); save(); renderHistory(); }
+  catch { alert('File tidak valid'); }
+});
+
+// Kunci hasil engine sebagai FINAL + catat harga XAU saat rilis
+function updateActual() {
+  const t = activeTab(), { eng } = predict(t);
+  if (!eng || eng.pending) { $('liveMsg').innerHTML = '<span class="c-short">Actual belum lengkap — isi Actual & Forecast dulu.</span>'; return; }
+  const ev = currentEvent(t);
+  // Harga saat rilis: pakai jejak harga terdekat dengan jam rilis (jika rilis ≤ 6 jam lalu), selain itu harga sekarang
+  let px = num($('xauAtRelease').value);
+  if (px === null && ev && ev.t <= Date.now() && S.cache.xauTrail?.length) {
+    const near = S.cache.xauTrail.reduce((a, p) => Math.abs(p[0] - ev.t) < Math.abs(a[0] - ev.t) ? p : a);
+    if (Math.abs(near[0] - ev.t) < 15 * 60e3) px = near[1];
+  }
+  if (px === null && S.cache.xau) px = S.cache.xau.v;
+  S.evalr[t] = { signal: eng.signal, strength: eng.strength, confidence: eng.confidence, avf: eng.avf, xauAtRelease: px, reactionManual: $('xauReactionManual').value, at: new Date().toISOString(), eventT: ev?.t };
+  save(); $('xauAtRelease').value = px ?? '';
+  $('liveMsg').textContent = 'Prediksi dikunci sebagai FINAL. Reaksi XAU dihitung dari harga live (refresh tiap 5 menit) — atau isi reaksi manual.';
+  renderComputed();
+}
+function saveToHistory() {
+  const t = activeTab(), e = S.evalr[t];
+  if (!e) { $('liveMsg').innerHTML = '<span class="c-short">Tekan UPDATE ACTUAL dulu.</span>'; return; }
+  const rx = reactionOf(t);
+  S.history.push({ id: 'h' + Date.now(), date: e.eventT || e.at, type: t, avf: e.avf, signal: e.signal, strength: e.strength, confidence: e.confidence, reaction: rx, result: Engine.verdict(e.signal, rx) || '—' });
+  save(); renderHistory(); $('liveMsg').textContent = 'Tersimpan ke History Log.';
+}
+
+/* ---------------- 6. DATA DUMMY & UJI ENGINE ---------------- */
+const DUMMY = {
+  NFP: { lead: { adpA: 185, adpF: 150, adpP: 140, ismMfgEmp: 47.8, ismSvcEmp: 51.2, cl1A: 212, cl1P: 220, cl2A: 220, cl2P: 225 }, rel: { nfpA: 250, nfpF: 163, nfpP: 140, aheA: 0.3, aheF: 0.3, aheP: 0.3 } },
+  CPI: { lead: { ppiLastA: 0.4, ppiLastF: 0.2, ismPPmA: 62.1, ismPPmP: 58.4, ismPPsA: 68.0, ismPPsP: 69.1, umichA: 3.4, umichP: 3.1 }, rel: { coreA: 0.5, coreF: 0.3, coreP: 0.3, headA: 0.4, headF: 0.3, headP: 0.2 } },
+  PPI: { lead: { ismPPmA: 62.1, ismPPsA: 68.0, crude30: 5.4 }, rel: { coreA: 0.4, coreF: 0.2, coreP: 0.1, headA: 0.5, headF: 0.3, headP: 0.2 } },
+  FOMC: { lead: { pHold: 94, pCut: 6, pHike: 0 }, rel: { bps: '0', tone: 'hawkish' } }
+};
+function loadDummy(t) {
+  const d = DUMMY[t];
+  Object.entries(d.lead).forEach(([k, v]) => { S.lead[k] = String(v); S.src['lead.' + k] = 'dummy'; });
+  Object.entries(d.rel).forEach(([k, v]) => { S.rel[t][k] = String(v); S.src[`rel.${t}.${k}`] = 'dummy'; });
+  if (t === 'FOMC' && !S.tones.length) S.tones.push({ d: new Date().toISOString(), who: 'Dummy Fed Member', tone: 'hawkish' });
+  save(); renderPre(); renderLive(); renderComputed();
+}
+// Contoh history (ditandai DUMMY, bukan data pasar nyata)
+function seedHistory() {
+  const now = new Date(), mk = (mo, day) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - mo, day, 12, 30)).toISOString();
+  const cases = [
+    ['NFP', 1, Engine.nfp({ nfpA: 250, nfpF: 163, aheA: 0.3, aheF: 0.3 }), -54], ['CPI', 1, Engine.cpi({ coreA: 0.4, coreF: 0.3, headA: 0.3, headF: 0.3, headP: 0.2 }), -12],
+    ['NFP', 2, Engine.nfp({ nfpA: 98, nfpF: 150, aheA: 0.2, aheF: 0.3 }), 38], ['CPI', 2, Engine.cpi({ coreA: 0.2, coreF: 0.3, headA: 0.1, headF: 0.2, headP: 0.4 }), 27],
+    ['FOMC', 2, Engine.fomc({ pHold: 92, pCut: 8, pHike: 0, actualBps: 0, tone: 'dovish' }), 21], ['NFP', 3, Engine.nfp({ nfpA: 190, nfpF: 175, aheA: 0.2, aheF: 0.3 }), -9],
+    ['CPI', 3, Engine.cpi({ coreA: 0.3, coreF: 0.3, headA: 0.6, headF: 0.3, headP: 0.2 }), -31], ['FOMC', 4, Engine.fomc({ pHold: 60, pCut: 40, pHike: 0, actualBps: -25, tone: 'netral' }), 44],
+    ['NFP', 4, Engine.nfp({ nfpA: 120, nfpF: 180, aheA: 0.4, aheF: 0.3 }), 16], ['PPI', 3, Engine.ppi({ coreA: 0.4, coreF: 0.2, headA: 0.3, headF: 0.2 }), null],
+    ['CPI', 5, Engine.cpi({ coreA: 0.2, coreF: 0.2, headA: 0.2, headF: 0.2, headP: 0.3 }), 6], ['FOMC', 6, Engine.fomc({ pHold: 97, pCut: 3, pHike: 0, actualBps: 0, tone: 'hawkish' }), -25]
+  ];
+  cases.forEach(([type, mo, r, rx], i) => S.history.push({ id: 'd' + Date.now() + i, dummy: true, date: mk(mo, 5 + i), type, avf: r.avf, signal: r.signal, strength: r.strength, confidence: r.confidence, reaction: rx, result: type === 'PPI' ? 'bias CPI' : Engine.verdict(r.signal, rx) }));
+  save(); renderHistory();
+}
+// Kasus uji: [nama, fungsi, input, ekspektasi sebagian]
+const TESTS = [
+  ['NFP +87K, AHE netral → SHORT KUAT 60%', 'nfp', { nfpA: 250, nfpF: 163, aheA: 0.3, aheF: 0.3 }, { signal: 'SHORT', strength: 'KUAT', confidence: 60 }],
+  ['NFP & AHE sama-sama di bawah → AHE dominan LONG 85%', 'nfp', { nfpA: 100, nfpF: 150, aheA: 0.2, aheF: 0.3 }, { signal: 'LONG', strength: 'SEDANG', confidence: 85 }],
+  ['AHE panas dominan → SHORT 85%', 'nfp', { nfpA: 180, nfpF: 170, aheA: 0.5, aheF: 0.3 }, { signal: 'SHORT', confidence: 85 }],
+  ['NFP -130K dominan, AHE +0.1 kontradiktif → LONG KUAT 60%', 'nfp', { nfpA: 20, nfpF: 150, aheA: 0.4, aheF: 0.3 }, { signal: 'LONG', strength: 'KUAT', confidence: 60 }],
+  ['Core CPI +0.2 → SHORT 80%', 'cpi', { coreA: 0.5, coreF: 0.3, headA: 0.4, headF: 0.4, headP: 0.3 }, { signal: 'SHORT', confidence: 80 }],
+  ['Headline -0.2, core sesuai → LONG 75%', 'cpi', { coreA: 0.3, coreF: 0.3, headA: 0.1, headF: 0.3, headP: 0.2 }, { signal: 'LONG', confidence: 75 }],
+  ['Sesuai forecast, naik 0.4 dari prev → SHORT 65% LEMAH', 'cpi', { coreA: 0.3, coreF: 0.3, headA: 0.3, headF: 0.3, headP: -0.1 }, { signal: 'SHORT', confidence: 65, strength: 'LEMAH' }],
+  ['Semua flat → LONG 45% LEMAH', 'cpi', { coreA: 0.3, coreF: 0.3, headA: 0.3, headF: 0.3, headP: 0.3 }, { signal: 'LONG', confidence: 45, strength: 'LEMAH' }],
+  ['Core PPI di atas forecast → CPI PANAS (SHORT)', 'ppi', { coreA: 0.4, coreF: 0.2, headA: 0.5, headF: 0.3 }, { signal: 'SHORT' }],
+  ['Core PPI di bawah forecast → CPI MEREDA (LONG)', 'ppi', { coreA: 0.1, coreF: 0.2, headA: 0.1, headF: 0.2 }, { signal: 'LONG' }],
+  ['FOMC price-in 94% + tone hawkish → SHORT 65%', 'fomc', { pHold: 94, pCut: 6, pHike: 0, actualBps: 0, tone: 'hawkish' }, { signal: 'SHORT', confidence: 65 }],
+  ['FOMC cut 60% tapi HOLD → surprise hawkish SHORT 75%', 'fomc', { pHold: 40, pCut: 60, pHike: 0, actualBps: 0 }, { signal: 'SHORT', confidence: 75 }],
+  ['FOMC cut 55% dan CUT → surprise dovish LONG 75%', 'fomc', { pHold: 45, pCut: 55, pHike: 0, actualBps: -25 }, { signal: 'LONG', confidence: 75 }],
+  ['Verdict SHORT & XAU -54 → BENAR', 'verdict', ['SHORT', -54], 'BENAR'],
+  ['Verdict LONG & XAU -20 → SALAH', 'verdict', ['LONG', -20], 'SALAH']
+];
+function runTests() {
+  let pass = 0;
+  const lines = TESTS.map(([name, fn, input, exp]) => {
+    const out = fn === 'verdict' ? Engine.verdict(...input) : Engine[fn](Object.assign({ headP: null, headA: null, headF: null }, input));
+    const ok = typeof exp === 'string' ? out === exp : out && Object.entries(exp).every(([k, v]) => out[k] === v);
+    if (ok) pass++;
+    const got = typeof out === 'string' ? out : out ? `${out.signal} ${out.strength} ${out.confidence ?? ''}` : 'null';
+    return `<div class="flex gap-2"><span class="${ok ? 'c-long' : 'c-short'} font-bold w-10">${ok ? 'PASS' : 'FAIL'}</span><span class="flex-1">${esc(name)}</span><span class="muted">${esc(got)}</span></div>`;
+  });
+  $('testBody').innerHTML = lines.join('');
+  $('testSummary').textContent = `${pass}/${TESTS.length} lulus`;
+  $('testSummary').className = 'badge ' + (pass === TESTS.length ? 'bg-long' : 'bg-short');
+  window.__engineTests = { pass, total: TESTS.length };
+  return pass === TESTS.length;
+}
+
+/* ---------------- REFRESH LOOP ---------------- */
+let refreshing = false;
+async function refreshAll(force = false) {
+  if (refreshing) return; refreshing = true;
+  $('btnRefresh').textContent = '↻ Memuat…';
+  await Promise.allSettled([getXAU(), getDXY(), getTNX(), getOil(), getCalendar(force), getBLS(false)]);
+  // Auto-fetch actual: jika event jenis aktif sudah rilis (≤ 6 jam) dan actual masih kosong
+  for (const t of ['NFP', 'CPI', 'PPI']) {
+    const ev = currentEvent(t), keyA = t === 'NFP' ? 'nfpA' : 'coreA';
+    if (ev && ev.t <= Date.now() && Date.now() - ev.t < 6 * 3600e3 && !num(S.rel[t][keyA])) {
+      // cek ulang BLS tiap 30 menit (tanpa key) / 5 menit (dengan key) — hemat kuota
+      const st = !S.cache.blsProbe || Date.now() - S.cache.blsProbe > (S.blsKey ? 5 : 30) * 60e3;
+      if (st) S.cache.blsProbe = Date.now();
+      await autoFetchActual(t, st);
+    }
+  }
+  S.cache.lastRefresh = new Date().toISOString();
+  save(); refreshing = false; $('btnRefresh').textContent = '↻ Refresh';
+  renderSchedule(); renderSidebar();
+  // hanya render ulang form bila user tidak sedang mengetik
+  if (!document.activeElement?.dataset?.path) { renderPre(); renderLive(); }
+  renderComputed(); renderHistory();
+}
+
+(async function init() {
+  runTests();
+  $('blsKey').value = S.blsKey || '';
+  // Tampilkan cache dulu (offline-first), lalu fetch
+  renderAll();
+  renderClock(); setInterval(renderClock, 1000);
+  await detectLocalProxy();
+  renderSources();
+  await refreshAll();
+  setInterval(() => { if (isMarketOpen(new Date())) refreshAll(); }, 5 * 60e3);   // 5 menit saat market buka
+  setInterval(() => { if (isMarketOpen(new Date())) getXAU().then(() => { save(); renderSidebar(); renderComputed(); }); }, 60e3); // harga XAU tiap menit
+})();
+</script>
+</body>
+</html>
